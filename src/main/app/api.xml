@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns:context="http://www.springframework.org/schema/context" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:context="http://www.springframework.org/schema/context" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
 http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
-http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd">
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
 
     <http:listener-config name="api-httpListenerConfig" host="0.0.0.0" port="${http.listener.port}" doc:name="HTTP Listener Configuration"/>
     
@@ -23,6 +24,8 @@ http://www.springframework.org/schema/context http://www.springframework.org/sch
     		<import class="com.deloitte.mulesoft.helperclasses.CustomExceptionHelper"></import>
     	</expression-language>
     </configuration>
+
+    
     <context:property-placeholder location="crm_experience-${mule.env}.properties"/>
     
     <flow name="api-main">
@@ -63,7 +66,10 @@ http://www.springframework.org/schema/context http://www.springframework.org/sch
     </flow>
     
     <flow name="get:/customers/{ID}:api-config">
-        <set-payload value="#[NullPayload.getInstance()]" doc:name="Set Payload"/>
+        <logger message="${logging.flowStartMessage}" level="INFO" doc:name="Log flow start"/>
+        <validation:is-true message="API not implemented" exceptionClass="com.deloitte.crm.exceptions.APINotImplementedException" expression="#[1 == 0]" doc:name="Raise &quot;not implemented&quot; exception"/>
+        <logger message="${logging.flowEndMessage}" level="INFO" doc:name="Log Flow Complete"/>
+
     </flow>
     
     <apikit:mapping-exception-strategy name="api-apiKitGlobalExceptionMapping">
@@ -73,6 +79,7 @@ http://www.springframework.org/schema/context http://www.springframework.org/sch
         </apikit:mapping>
         <apikit:mapping statusCode="405">
             <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <apikit:exception value="com.deloitte.crm.exceptions.APINotImplementedException"/>
             <flow-ref name="set-error-values" doc:name="set-error-values"/>
         </apikit:mapping>
         <apikit:mapping statusCode="415">
