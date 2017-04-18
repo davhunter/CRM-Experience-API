@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:context="http://www.springframework.org/schema/context" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd">
+
+    <http:listener-config name="api-httpListenerConfig" host="0.0.0.0" port="${http.listener.port}" doc:name="HTTP Listener Configuration"/>
+    
+    <apikit:config name="api-config" raml="api.raml" consoleEnabled="false" doc:name="Router"/>
+    
+    <http:request-config name="Customer_HTTP_Request_Configuration" host="${customerapi.host}" port="${customerapi.port}" basePath="/customer-api" doc:name="HTTP Request Configuration">
+        <http:raml-api-configuration location="customer-api/api.raml"/>
+    </http:request-config>
+    
+    <http:request-config name="Product_HTTP_Request_Configuration" host="${productapi.host}" port="${productapi.port}" basePath="/product-api" doc:name="HTTP Request Configuration">
+        <http:raml-api-configuration location="product-api/api.raml"/>
+    </http:request-config>
+    
+    <configuration doc:name="Configuration">
+    	<expression-language>
+    		<import class="com.deloitte.mulesoft.helperclasses.CustomExceptionHelper"></import>
+    	</expression-language>
+    </configuration>
+    <context:property-placeholder location="crm_experience-${mule.env}.properties"/>
+    
+    <flow name="api-main">
+        <http:listener config-ref="api-httpListenerConfig" path="/crm-api/*" doc:name="HTTP"/>
+        <apikit:router config-ref="api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
+    </flow>
+    
+    <flow name="api-console">
+        <http:listener config-ref="api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
+        <apikit:console config-ref="api-config" doc:name="APIkit Console"/>
+    </flow>
+    
+    <flow name="get:/customers:api-config">
+        <logger message="${logging.flowStartMessage}" level="INFO" doc:name="Log Start of Flow"/>
+        <http:request config-ref="Customer_HTTP_Request_Configuration" path="/customers" method="GET" doc:name="Get Customers">
+            <http:request-builder>
+                <http:query-param paramName="retrieveProducts" value="true"/>
+                <http:query-param paramName="region" value="#[message.inboundProperties.'http.query.params'.region]"/>
+            </http:request-builder>
+        </http:request>
+        <json:json-to-object-transformer returnClass="com.deloitte.system.customer.cdm.Customers" doc:name="JSON to Object"/>
+        <set-variable variableName="customers" value="#[payload]" doc:name="Set Customers Variable"/>
+        <set-variable variableName="customerIDs" value="1,2" doc:name="List of Customer IDs"/>
+        <http:request config-ref="Product_HTTP_Request_Configuration" path="/products" method="GET" doc:name="Get Products for Customers">
+            <http:request-builder>
+                <http:query-param paramName="IDs" value="#[flowVars.customerIDs]"/>
+            </http:request-builder>
+        </http:request>
+        <json:json-to-object-transformer returnClass="com.deloitte.productapi.cdm.Products" doc:name="JSON to Object"/>
+        <set-variable variableName="products" value="#[payload]" doc:name="Set Products Variable"/>
+        <custom-transformer class="com.deloitte.crm.transformers.MergeCustomerAndProductTransformer" doc:name="Merge Customers and Products">
+            <spring:property name="productVariable" value="products"/>
+            <spring:property name="customerVariable" value="customers"/>
+        </custom-transformer>
+        <json:object-to-json-transformer doc:name="Convert to JSON"/>
+        <logger message="${logging.flowEndMessage}" level="INFO" doc:name="Log Flow Complete"/>
+    </flow>
+    
+    <flow name="get:/customers/{ID}:api-config">
+        <set-payload value="#[NullPayload.getInstance()]" doc:name="Set Payload"/>
+    </flow>
+    
+    <apikit:mapping-exception-strategy name="api-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <flow-ref name="set-error-values" doc:name="set-error-values"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <flow-ref name="set-error-values" doc:name="set-error-values"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <flow-ref name="set-error-values" doc:name="set-error-values"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <flow-ref name="set-error-values" doc:name="set-error-values"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException" />
+            <flow-ref name="set-error-values" doc:name="set-error-values"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="500">
+        	<apikit:exception value="java.sql.SQLException"/>
+        	<flow-ref name="set-error-values" doc:name="set-error-values"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+    
+    <sub-flow name="set-error-values">
+        <set-property propertyName="Content-Type" value="application/json" doc:name="Set Content Type"/>
+        <set-variable variableName="errorDescription" value="#[CustomExceptionHelper.escapeStringForJSON(exception.getMessage())]" doc:name="Set Error Description"/>
+        <set-variable variableName="errorCode" value="#[CustomExceptionHelper.getErrorCode(exception.cause.class)]" doc:name="Set Error Code"/>
+        <set-payload value="{  &quot;errorCode&quot;: #[flowVars.errorCode],  &quot;message&quot;: &quot;#[flowVars.errorDescription]&quot; }" doc:name="Set Payload"/>
+        <logger message="#[payload]" level="ERROR" doc:name="Log Error"/>
+    </sub-flow>
+</mule>

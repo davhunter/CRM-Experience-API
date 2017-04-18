@@ -1,0 +1,121 @@
+#%RAML 1.0
+title: CRM API
+version: 1.0
+baseUri: http://localhost:8084/crm-api
+
+documentation: 
+  - title:  CRM API
+    content: Experience API used by the CRM system. Depends on microservices for **Customer** and **Product** for retrieving data.
+
+types: 
+  Customers:
+    description: Collection of `Customer` objects
+    type: object
+    properties: 
+      customers:
+        type: array
+        items: Customer
+        required: true
+        
+  Customer:
+    description: Properties for Customers, retrieved from the Customer microservice
+    type: object
+    properties: 
+      ID:
+        description: Unique ID for the customer
+        type: integer
+        required: true
+      firstName:
+        type: string
+        required: true
+      lastName:
+        type: string
+        required: true
+      region:
+        description: Region for the customer
+        type: string
+        required: true
+      phone:
+        description: Customer's phone number in 9999999999 format (not validated)
+        type: string
+        required: true
+      products:
+        description: A list of `Product` objects, if any exist for this customer
+        type: array
+        items: Product
+        required: false
+    example:
+      ID: 1
+      firstName: "David"
+      lastName: "Hunter"
+      region: "GTA"
+      phone: "4165551212"
+      
+  Product:
+    description: Properties for Products, retrieved from the **Product** microservice
+    type: object
+    properties: 
+      ID:
+        description: Unique ID for the Product. Note that, while a product has a unique ID, it can be associated with multiple `Regions', so the same product will sometimes show up multiple times in a list.
+        type: integer
+        required: true
+      name:
+        description: Short name of the product
+        type: string
+        required: true
+      description:
+        description: Long description of the product
+        type: string
+        required: false
+      region:
+        description: Region with which this product is associated
+        type: string
+        required: true
+      price:
+        description: Price of the product, for a given region
+        type: number
+        required: true
+    example:
+      ID: 1
+      name: "Neato Product"
+      description: "This is awesome. You need three of them."
+      region: "GTA"
+      price: 123.21
+      
+/customers:
+  get:
+    description: Returns a list of customers, matching the given parameters (if any)
+    queryParameters: 
+      region:
+        description: Used to filter customers based on region
+        type: string
+        required: false
+    responses: 
+      200:
+        description: Returned if any customers match the given parameters
+        body: 
+          application/json:
+            type: Customers
+      404:
+        description: Returned if no customers match the given parameters
+        body: 
+          application/json:
+            type: !include Error.raml
+            example: |
+              {"errorCode": -1, "message": "No Customers found." }
+  /{ID}:
+    get:
+      description: Returns a single customer
+      responses: 
+        200:
+          description: Returns the customer, if found
+          body: 
+            application/json:
+              type: Customer
+        404:
+          description: Returned if no customer matches this ID
+          body: 
+            application/json:
+              type: !include Error.raml
+              example: |
+                {"errorCode": -1, "message": "Customer not found"}
